@@ -34,6 +34,7 @@ impl<K: Key> Default for Deque<K> {
 }
 
 impl<K: Key> Deque<K> {
+    #[inline]
     pub fn new() -> Self {
         Self {
             head: K::null(),
@@ -41,10 +42,12 @@ impl<K: Key> Deque<K> {
         }
     }
     /// Get head key
+    #[inline]
     pub fn head(&self) -> K {
         self.head
     }
     /// Get tail key
+    #[inline]
     pub fn tail(&self) -> K {
         self.tail
     }
@@ -158,6 +161,23 @@ impl<K: Key> Deque<K> {
         } else {
             None
         }
+    }
+    ///Append an Deque to the Deque tail
+    pub fn merge_back<T>(
+        &mut self,
+        deque: Deque<K>,
+        slot: &mut Slot<K, T>,
+    ) {
+        if deque.head.is_null() {
+            return
+        }
+        if !self.tail.is_null() {
+            unsafe { slot.get_unchecked_mut(self.tail).next = deque.head };
+            unsafe { slot.get_unchecked_mut(deque.head).prev = self.tail };
+        }else{
+            self.head = deque.head;
+        }
+        self.tail = deque.tail;
     }
     ///repair Deque.
     pub fn repair<T>(
