@@ -162,6 +162,51 @@ impl<K: Key> Deque<K> {
             None
         }
     }
+    /// Removes the last element from the Deque and returns key, or None if it is empty.
+    pub fn pop_key_back<T>(&mut self, slot: &mut Slot<K, T>) -> Option<K> {
+        if let Some(node) = slot.get(self.tail) {
+            let old = self.tail;
+            self.tail = node.prev;
+            if self.tail.is_null() {
+                self.head = K::null();
+            } else {
+                unsafe { slot.get_unchecked_mut(self.tail).next = K::null() };
+            }
+            Some(old)
+        } else {
+            None
+        }
+    }
+
+    /// Removes the first element from the Deque and returns key, or None if it is empty.
+    pub fn pop_key_front<T>(&mut self, slot: &mut Slot<K, T>) -> Option<K> {
+        if let Some(node) = slot.get(self.head) {
+            let old = self.head;
+            self.head = node.next;
+            if self.head.is_null() {
+                self.tail = K::null();
+            } else {
+                unsafe { slot.get_unchecked_mut(self.head).prev = K::null() };
+            }
+            Some(old)
+        } else {
+            None
+        }
+    }
+
+    ///Removes and returns bool from the Deque.
+    pub fn remove_key<T>(
+        &mut self,
+        key: K,
+        slot: &mut Slot<K, T>,
+    ) -> bool {
+        if let Some(node) = slot.get(key) {
+            self.repair(node.prev, node.next, slot);
+            true
+        } else {
+            false
+        }
+    }
     ///Append an Deque to the Deque tail
     pub fn merge_back<T>(
         &mut self,
