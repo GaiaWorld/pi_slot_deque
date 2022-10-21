@@ -149,6 +149,22 @@ impl<K: Key> Deque<K> {
         }
     }
 
+    /// Removes the first element and key from the Deque and returns it, or None if it is empty.
+    pub fn pop_kv_front<T>(&mut self, slot: &mut Slot<K, T>) -> Option<(K, T)> {
+        let key = self.head;
+        if let Some(node) = slot.remove(self.head) {
+            self.head = node.next;
+            if self.head.is_null() {
+                self.tail = K::null();
+            } else {
+                unsafe { slot.get_unchecked_mut(self.head).prev = K::null() };
+            }
+            Some((key, node.el))
+        } else {
+            None
+        }
+    }
+
     ///Removes and returns the element at key from the Deque.
     pub fn remove<T>(
         &mut self,
