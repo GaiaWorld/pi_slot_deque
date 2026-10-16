@@ -21,10 +21,11 @@ use slotmap::{Key, SlotMap};
 pub type Slot<K, T> = SlotMap<K, LinkedNode<K, T>>;
 
 /// 双端队列
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Deque<K: Key> {
     head: K,
     tail: K,
+    len: usize,
 }
 
 impl<K: Key> Default for Deque<K> {
@@ -39,6 +40,7 @@ impl<K: Key> Deque<K> {
         Self {
             head: K::null(),
             tail: K::null(),
+            len: 0,
         }
     }
     /// Get head key
@@ -51,9 +53,15 @@ impl<K: Key> Deque<K> {
     pub fn tail(&self) -> K {
         self.tail
     }
+    /// Number of nodes in this deque.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
 
     /// Append an element to the Deque. return a key
     pub fn push_back<T>(&mut self, el: T, slot: &mut Slot<K, T>) -> K {
+        self.len += 1;
         if self.tail.is_null() {
             let key = slot.insert(LinkedNode::new(el, K::null(), K::null()));
             self.head = key;
@@ -71,6 +79,7 @@ impl<K: Key> Deque<K> {
 
     /// Prepend an element to the Deque. return a key
     pub fn push_front<T>(&mut self, el: T, slot: &mut Slot<K, T>) -> K {
+        self.len += 1;
         if self.head.is_null() {
             let key = slot.insert(LinkedNode::new(el, K::null(), K::null()));
             self.head = key;
@@ -88,6 +97,7 @@ impl<K: Key> Deque<K> {
     /// Append an key to the Deque
     pub fn push_key_back<T>(&mut self, key: K, slot: &mut Slot<K, T>) {
         let node = unsafe { slot.get_unchecked_mut(key) };
+        self.len += 1;
         if self.tail.is_null() {
             node.prev = K::null();
             node.next = K::null();
@@ -105,6 +115,7 @@ impl<K: Key> Deque<K> {
     /// Append an key to the Deque
     pub fn push_key_front<T>(&mut self, key: K, slot: &mut Slot<K, T>) {
         let node = unsafe { slot.get_unchecked_mut(key) };
+        self.len += 1;
         if self.head.is_null() {
             node.prev = K::null();
             node.next = K::null();
@@ -114,14 +125,49 @@ impl<K: Key> Deque<K> {
             node.prev = K::null();
             node.next = self.head;
             unsafe {
-                slot.get_unchecked_mut(self.tail).prev = key;
+                slot.get_unchecked_mut(self.head).prev = key;
             }
             self.head = key;
         }
     }
+    /// Insert an element before anchor; a null anchor appends to the tail.
+    /// A non-null anchor must belong to this deque.
+    pub fn insert_before<T>(&mut self, el: T, anchor: K, slot: &mut Slot<K, T>) -> K {
+        if anchor.is_null() {
+            return self.push_back(el, slot);
+        }
+        let prev = slot[anchor].prev;
+        let key = slot.insert(LinkedNode::new(el, prev, anchor));
+        slot[anchor].prev = key;
+        if prev.is_null() {
+            self.head = key;
+        } else {
+            slot[prev].next = key;
+        }
+        self.len += 1;
+        key
+    }
+    /// Insert an element after anchor; a null anchor prepends to the head.
+    /// A non-null anchor must belong to this deque.
+    pub fn insert_after<T>(&mut self, el: T, anchor: K, slot: &mut Slot<K, T>) -> K {
+        if anchor.is_null() {
+            return self.push_front(el, slot);
+        }
+        let next = slot[anchor].next;
+        let key = slot.insert(LinkedNode::new(el, anchor, next));
+        slot[anchor].next = key;
+        if next.is_null() {
+            self.tail = key;
+        } else {
+            slot[next].prev = key;
+        }
+        self.len += 1;
+        key
+    }
     /// Removes the last element from the Deque and returns it, or None if it is empty.
     pub fn pop_back<T>(&mut self, slot: &mut Slot<K, T>) -> Option<T> {
         if let Some(node) = slot.remove(self.tail) {
+            self.len -= 1;
             self.tail = node.prev;
             if self.tail.is_null() {
                 self.head = K::null();
@@ -137,6 +183,7 @@ impl<K: Key> Deque<K> {
     /// Removes the first element from the Deque and returns it, or None if it is empty.
     pub fn pop_front<T>(&mut self, slot: &mut Slot<K, T>) -> Option<T> {
         if let Some(node) = slot.remove(self.head) {
+            self.len -= 1;
             self.head = node.next;
             if self.head.is_null() {
                 self.tail = K::null();
@@ -153,6 +200,7 @@ impl<K: Key> Deque<K> {
     pub fn pop_kv_front<T>(&mut self, slot: &mut Slot<K, T>) -> Option<(K, T)> {
         let key = self.head;
         if let Some(node) = slot.remove(self.head) {
+            self.len -= 1;
             self.head = node.next;
             if self.head.is_null() {
                 self.tail = K::null();
@@ -181,6 +229,7 @@ impl<K: Key> Deque<K> {
     /// Removes the last element from the Deque and returns key, or None if it is empty.
     pub fn pop_key_back<T>(&mut self, slot: &mut Slot<K, T>) -> Option<K> {
         if let Some(node) = slot.get(self.tail) {
+            self.len -= 1;
             let old = self.tail;
             self.tail = node.prev;
             if self.tail.is_null() {
@@ -197,6 +246,7 @@ impl<K: Key> Deque<K> {
     /// Removes the first element from the Deque and returns key, or None if it is empty.
     pub fn pop_key_front<T>(&mut self, slot: &mut Slot<K, T>) -> Option<K> {
         if let Some(node) = slot.get(self.head) {
+            self.len -= 1;
             let old = self.head;
             self.head = node.next;
             if self.head.is_null() {
@@ -223,8 +273,8 @@ impl<K: Key> Deque<K> {
             false
         }
     }
-    ///Append an Deque to the Deque tail
-    pub fn merge_back<T>(
+    /// Append a Deque to the tail, consuming the source Deque.
+    pub fn append<T>(
         &mut self,
         deque: Deque<K>,
         slot: &mut Slot<K, T>,
@@ -232,6 +282,7 @@ impl<K: Key> Deque<K> {
         if deque.head.is_null() {
             return
         }
+        self.len += deque.len;
         if !self.tail.is_null() {
             unsafe { slot.get_unchecked_mut(self.tail).next = deque.head };
             unsafe { slot.get_unchecked_mut(deque.head).prev = self.tail };
@@ -247,6 +298,7 @@ impl<K: Key> Deque<K> {
         next: K,
         slot: &mut Slot<K, T>,
     ) {
+        self.len -= 1;
         if prev.is_null() {
             if next.is_null() {
                 //如果该元素既不存在上一个元素，也不存在下一个元素， 则设置队列的头部None， 则设置队列的尾部None
@@ -274,6 +326,7 @@ impl<K: Key> Deque<K> {
             self.head = node.next;
         }
         self.tail = K::null();
+        self.len = 0;
     }
     pub fn iter<'a, T>(&self, container: &'a SlotMap<K, LinkedNode<K, T>>) -> Iter<'a, K, T> {
         Iter {
@@ -306,6 +359,7 @@ impl<K: Key> Debug for Deque<K> {
         f.debug_struct("Deque")
             .field("first", &self.head)
             .field("last", &self.tail)
+            .field("len", &self.len)
             .finish()
     }
 }
@@ -341,5 +395,47 @@ impl<K: Key, T: Debug> Debug for LinkedNode<K, T> {
             .field("prev", &self.prev)
             .field("next", &self.next)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slotmap::DefaultKey;
+
+    #[test]
+    fn push_existing_key_front_preserves_links() {
+        let mut slot: Slot<DefaultKey, i32> = SlotMap::with_key();
+        let mut deque = Deque::new();
+        let first = deque.push_back(1, &mut slot);
+        deque.push_back(2, &mut slot);
+        deque.push_back(3, &mut slot);
+        let null = slot[first].prev();
+        let key = slot.insert(LinkedNode::new(0, null, null));
+
+        deque.push_key_front(key, &mut slot);
+
+        assert_eq!(slot[first].prev(), key);
+        assert_eq!(deque.pop_back(&mut slot), Some(3));
+        assert_eq!(deque.pop_back(&mut slot), Some(2));
+        assert_eq!(deque.pop_back(&mut slot), Some(1));
+        assert_eq!(deque.pop_back(&mut slot), Some(0));
+    }
+
+    #[test]
+    fn append_preserves_order_and_consumes_source() {
+        let mut slot: Slot<DefaultKey, i32> = SlotMap::with_key();
+        let mut destination = Deque::new();
+        let mut source = Deque::new();
+        destination.push_back(1, &mut slot);
+        source.push_back(2, &mut slot);
+        source.push_back(3, &mut slot);
+
+        destination.append(source, &mut slot);
+
+        assert_eq!(destination.pop_front(&mut slot), Some(1));
+        assert_eq!(destination.pop_front(&mut slot), Some(2));
+        assert_eq!(destination.pop_front(&mut slot), Some(3));
+        assert_eq!(destination.pop_front(&mut slot), None);
     }
 }

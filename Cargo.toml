@@ -9,4 +9,4 @@ license = "MIT OR Apache-2.0"
 keywords = ["pi", "deque", "slot_deque", "pi_slot_deque"]
 
 [dependencies]
-slotmap = { version = "0.2", package = "pi_slotmap" }
+slotmap = { version = "0.4", package = "pi_slotmap" }
