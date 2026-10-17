@@ -1,9 +1,9 @@
-use pi_slot_deque::{Deque, Slot};
+use pi_slot_deque::{Deque, DequeStorage};
 use slotmap::DefaultKey;
 
 #[test]
 fn empty_operations_and_debug() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut deque = Deque::default();
     assert_eq!(deque.len(), 0);
     assert_eq!(deque.head(), deque.tail());
@@ -13,15 +13,13 @@ fn empty_operations_and_debug() {
     assert_eq!(ops.pop_front(), None);
     assert_eq!(ops.pop_back(), None);
     assert_eq!(ops.pop_kv_front(), None);
-    assert_eq!(ops.pop_key_front(), None);
-    assert_eq!(ops.pop_key_back(), None);
     ops.clear();
     assert_eq!(ops.len(), 0);
 }
 
 #[test]
 fn push_pop_and_access_elements() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut deque = Deque::new();
     let middle = deque.ops(&mut slot).push_back(2);
     let back = deque.ops(&mut slot).push_back(3);
@@ -45,7 +43,7 @@ fn push_pop_and_access_elements() {
 
 #[test]
 fn insert_before_and_after_preserve_order_and_length() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut deque = Deque::new();
     let null = deque.head();
     let second = deque.ops(&mut slot).insert_before(2, null);
@@ -73,7 +71,7 @@ fn insert_before_and_after_preserve_order_and_length() {
 
 #[test]
 fn null_anchor_after_prepends_and_before_appends() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut deque = Deque::new();
     let null = deque.head();
     let back = deque.ops(&mut slot).insert_after(2, null);
@@ -89,45 +87,8 @@ fn null_anchor_after_prepends_and_before_appends() {
 }
 
 #[test]
-fn detached_keys_reinsert_and_remove_without_deleting_values() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
-    let mut deque = Deque::new();
-    let detached = slot.insert(1);
-    deque.ops(&mut slot).push_key_back(detached);
-    let other = deque.ops(&mut slot).push_back(2);
-    assert_eq!(deque.ops(&mut slot).pop_key_front(), Some(detached));
-    deque.ops(&mut slot).push_key_front(detached);
-    assert!(deque.ops(&mut slot).remove_key(other));
-    assert_eq!(deque.len(), 1);
-    assert_eq!(deque.ops(&mut slot).pop_key_front(), Some(detached));
-    assert_eq!(deque.len(), 0);
-    let null = deque.head();
-    assert!(!deque.ops(&mut slot).remove_key(null));
-    assert_eq!(slot.get(detached), Some(&1));
-    assert_eq!(slot.get(other), Some(&2));
-}
-
-#[test]
-fn key_pops_and_clear_track_length() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
-    let mut deque = Deque::new();
-    let first = deque.ops(&mut slot).push_front(1);
-    let last = deque.ops(&mut slot).push_back(2);
-    assert_eq!(deque.ops(&mut slot).pop_key_back(), Some(last));
-    assert_eq!(deque.len(), 1);
-    assert_eq!(deque.ops(&mut slot).pop_key_front(), Some(first));
-    assert_eq!(deque.len(), 0);
-    deque.ops(&mut slot).push_key_front(last);
-    deque.ops(&mut slot).push_key_back(first);
-    assert_eq!(deque.len(), 2);
-    deque.ops(&mut slot).clear();
-    assert_eq!(deque.len(), 0);
-    assert_eq!(slot.len(), 0);
-}
-
-#[test]
 fn append_consumes_source_and_updates_length() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut destination = Deque::new();
     let mut source = Deque::new();
     source.ops(&mut slot).push_back(2);
@@ -147,27 +108,8 @@ fn append_consumes_source_and_updates_length() {
 }
 
 #[test]
-fn remove_key_unlinks_head_middle_and_tail_without_removing_values() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
-    let mut deque = Deque::new();
-    let first = deque.ops(&mut slot).push_back(1);
-    let middle = deque.ops(&mut slot).push_back(2);
-    let last = deque.ops(&mut slot).push_back(3);
-    assert!(deque.ops(&mut slot).remove_key(middle));
-    assert_eq!(deque.len(), 2);
-    assert_eq!(deque.iter(&slot).copied().collect::<Vec<_>>(), vec![1, 3]);
-    assert!(deque.ops(&mut slot).remove_key(first));
-    assert_eq!(deque.head(), last);
-    assert_eq!(deque.len(), 1);
-    assert!(deque.ops(&mut slot).remove_key(last));
-    assert_eq!(deque.len(), 0);
-    assert_eq!(deque.head(), deque.tail());
-    assert_eq!(slot.len(), 3);
-}
-
-#[test]
 fn append_to_nonempty_destination_preserves_order() {
-    let mut slot = Slot::<DefaultKey, i32>::new();
+    let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut destination = Deque::new();
     let mut source = Deque::new();
     destination.ops(&mut slot).push_back(1);
@@ -180,4 +122,45 @@ fn append_to_nonempty_destination_preserves_order() {
     );
     assert_eq!(destination.ops(&mut slot).pop_back(), Some(2));
     assert_eq!(destination.ops(&mut slot).pop_back(), Some(1));
+}
+
+#[test]
+fn storage_indexes_values_without_exposing_nodes() {
+    let mut storage = DequeStorage::<DefaultKey, String>::new();
+    let mut deque = Deque::new();
+    let key = deque.ops(&mut storage).push_back(String::from("before"));
+    assert_eq!(storage[key], "before");
+    storage[key] = String::from("after");
+    assert_eq!(
+        deque.ops(&mut storage).pop_front(),
+        Some(String::from("after"))
+    );
+    assert_eq!(storage.get(key), None);
+}
+
+#[test]
+#[should_panic]
+fn storage_index_panics_for_removed_key() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut deque = Deque::new();
+    let key = deque.ops(&mut storage).push_back(1);
+    assert_eq!(deque.ops(&mut storage).remove(key), Some(1));
+    let _value = storage[key];
+}
+
+#[test]
+fn clear_only_removes_current_deques_elements() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut first = Deque::new();
+    let mut second = Deque::new();
+    let removed = first.ops(&mut storage).push_back(1);
+    first.ops(&mut storage).push_back(2);
+    let retained = second.ops(&mut storage).push_back(3);
+    first.ops(&mut storage).clear();
+    first.ops(&mut storage).clear();
+    assert_eq!(first.len(), 0);
+    assert_eq!(storage.get(removed), None);
+    assert_eq!(storage.len(), 1);
+    assert_eq!(storage[retained], 3);
+    assert_eq!(second.ops(&mut storage).pop_front(), Some(3));
 }
