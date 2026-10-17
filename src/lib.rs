@@ -52,6 +52,12 @@ impl<K: Key, T> DequeStorage<K, T> {
     pub fn new() -> Self {
         Self::default()
     }
+    /// 创建空存储，预留至少可容纳 capacity 个元素的空间。
+    ///
+    /// 预留容量不是元素数量或上限，后续插入超过容量时会自动扩容。
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(SlotMap::with_capacity_and_key(capacity))
+    }
     /// 按键获取元素；键无效或元素已删除时返回 None。
     pub fn get(&self, key: K) -> Option<&T> {
         self.0.get(key).map(|node| &node.el)
@@ -59,6 +65,14 @@ impl<K: Key, T> DequeStorage<K, T> {
     /// 按键获取可变元素引用，不允许修改节点链接；无效键返回 None。
     pub fn get_mut(&mut self, key: K) -> Option<&mut T> {
         self.0.get_mut(key).map(|node| &mut node.el)
+    }
+    /// 返回指定元素的后继键；队尾返回 Some(空键)，无效键返回 None。
+    pub fn next(&self, key: K) -> Option<K> {
+        self.0.get(key).map(|node| node.next)
+    }
+    /// 返回指定元素的前驱键；队首返回 Some(空键)，无效键返回 None。
+    pub fn prev(&self, key: K) -> Option<K> {
+        self.0.get(key).map(|node| node.prev)
     }
     /// 判断键是否仍对应存储中的元素，不检查元素属于哪个队列。
     pub fn contains_key(&self, key: K) -> bool {
@@ -139,9 +153,33 @@ impl<K: Key, T> Deque<K, T> {
     ///
     /// 必须传入原存储；迭代结束后继续调用 next 仍返回 None。
     pub fn iter<'a>(&self, slot: &'a DequeStorage<K, T>) -> Iter<'a, K, T> {
+        self.iter_from(self.head, slot)
+    }
+
+    /// 从指定键开始向队尾遍历，包含起始元素；空键或无效键产生空迭代。
+    ///
+    /// 有效起始键必须属于当前队列，且必须传入原存储。
+    pub fn iter_from<'a>(&self, key: K, slot: &'a DequeStorage<K, T>) -> Iter<'a, K, T> {
         Iter {
-            next: self.head,
+            next: key,
             container: &slot.0,
+            reverse: false,
+        }
+    }
+
+    /// 从队尾沿前驱向队首遍历；必须传入原存储。
+    pub fn iter_rev<'a>(&self, slot: &'a DequeStorage<K, T>) -> Iter<'a, K, T> {
+        self.iter_rev_from(self.tail, slot)
+    }
+
+    /// 从指定键开始向队首遍历，包含起始元素；空键或无效键产生空迭代。
+    ///
+    /// 有效起始键必须属于当前队列，且必须传入原存储。
+    pub fn iter_rev_from<'a>(&self, key: K, slot: &'a DequeStorage<K, T>) -> Iter<'a, K, T> {
+        Iter {
+            next: key,
+            container: &slot.0,
+            reverse: true,
         }
     }
 }
@@ -358,10 +396,11 @@ impl<K: Key, T> DequeOps<'_, K, T> {
     }
 }
 
-/// 按队列顺序返回元素共享引用的迭代器，由 [Deque::iter] 创建。
+/// 按创建时指定的方向返回元素共享引用，包含起始键对应的元素。
 pub struct Iter<'a, K: Key, T: 'a> {
     next: K,
     container: &'a SlotMap<K, LinkedNode<K, T>>,
+    reverse: bool,
 }
 
 impl<'a, K: Key, T> Iterator for Iter<'a, K, T> {
@@ -371,8 +410,11 @@ impl<'a, K: Key, T> Iterator for Iter<'a, K, T> {
         if self.next.is_null() {
             return None;
         }
-        let node = unsafe { self.container.get_unchecked(self.next) };
-        self.next = node.next;
+        let Some(node) = self.container.get(self.next) else {
+            self.next = K::null();
+            return None;
+        };
+        self.next = if self.reverse { node.prev } else { node.next };
         Some(&node.el)
     }
 }

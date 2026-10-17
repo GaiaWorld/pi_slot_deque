@@ -2,6 +2,101 @@ use pi_slot_deque::{Deque, DequeStorage};
 use slotmap::DefaultKey;
 
 #[test]
+fn neighbors_and_directional_iteration_follow_queue_links() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut deque = Deque::new();
+    let null = deque.head();
+    let first = deque.ops(&mut storage).push_back(1);
+    let middle = deque.ops(&mut storage).push_back(2);
+    let last = deque.ops(&mut storage).push_back(3);
+    assert_eq!(storage.prev(first), Some(null));
+    assert_eq!(storage.next(first), Some(middle));
+    assert_eq!(storage.prev(middle), Some(first));
+    assert_eq!(storage.next(middle), Some(last));
+    assert_eq!(storage.next(last), Some(null));
+    assert_eq!(
+        deque
+            .iter_from(middle, &storage)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![2, 3]
+    );
+    assert_eq!(
+        deque.iter_rev(&storage).copied().collect::<Vec<_>>(),
+        vec![3, 2, 1]
+    );
+    assert_eq!(
+        deque
+            .iter_rev_from(middle, &storage)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![2, 1]
+    );
+    assert_eq!(
+        deque.iter_from(last, &storage).copied().collect::<Vec<_>>(),
+        vec![3]
+    );
+    assert_eq!(
+        deque
+            .iter_rev_from(first, &storage)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![1]
+    );
+    assert_eq!(deque.ops(&mut storage).remove(middle), Some(2));
+    assert_eq!(storage.next(first), Some(last));
+    assert_eq!(storage.prev(last), Some(first));
+    assert_eq!(storage.next(middle), None);
+    assert_eq!(storage.prev(middle), None);
+    let mut invalid = deque.iter_from(middle, &storage);
+    assert_eq!(invalid.next(), None);
+    assert_eq!(invalid.next(), None);
+    assert_eq!(deque.iter_rev_from(middle, &storage).next(), None);
+    assert_eq!(deque.iter_from(null, &storage).next(), None);
+    assert_eq!(deque.iter_rev_from(null, &storage).next(), None);
+    assert_eq!(storage.next(null), None);
+    assert_eq!(storage.prev(null), None);
+}
+
+#[test]
+fn reverse_iteration_handles_empty_singleton_and_exhaustion() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut deque = Deque::new();
+    assert_eq!(deque.iter_rev(&storage).next(), None);
+    let only = deque.ops(&mut storage).push_back(1);
+    let mut reverse = deque.iter_rev_from(only, &storage);
+    assert_eq!(reverse.next(), Some(&1));
+    assert_eq!(reverse.next(), None);
+    assert_eq!(reverse.next(), None);
+    let mut forward = deque.iter_from(only, &storage);
+    assert_eq!(forward.next(), Some(&1));
+    assert_eq!(forward.next(), None);
+    assert_eq!(forward.next(), None);
+}
+
+#[test]
+fn with_capacity_starts_empty_and_allows_growth() {
+    for capacity in [0, 2, 8] {
+        let mut storage = DequeStorage::<DefaultKey, i32>::with_capacity(capacity);
+        let mut deque = Deque::new();
+        assert_eq!(storage.len(), 0);
+        for value in 0..10 {
+            let key = deque.ops(&mut storage).push_back(value);
+            assert_eq!(storage[key], value);
+        }
+        assert_eq!(storage.len(), 10);
+        assert_eq!(
+            deque.iter(&storage).copied().collect::<Vec<_>>(),
+            (0..10).collect::<Vec<_>>()
+        );
+        for value in 0..10 {
+            assert_eq!(deque.ops(&mut storage).pop_front(), Some(value));
+        }
+        assert_eq!(storage.len(), 0);
+    }
+}
+
+#[test]
 fn empty_operations_and_debug() {
     let mut slot = DequeStorage::<DefaultKey, i32>::new();
     let mut deque = Deque::default();

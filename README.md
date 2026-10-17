@@ -70,6 +70,9 @@ destination.ops(&mut storage).clear();
 | `Deque::len` | 返回当前队列长度，O(1) |
 | `ops(&mut storage)` | 创建独占借用的操作视图 |
 | `iter(&storage)` | 顺序遍历元素，不修改存储 |
+| `iter_from(key, &storage)` | 从指定键开始向队尾遍历，包含起始元素 |
+| `iter_rev(&storage)` | 从队尾沿前驱向队首遍历 |
+| `iter_rev_from(key, &storage)` | 从指定键开始向队首遍历，包含起始元素 |
 | `push_front/push_back` | 创建元素并插入两端，返回新键，O(1) |
 | `insert_before(value, anchor)` | 锚点前插入；空锚点表示追加队尾，O(1) |
 | `insert_after(value, anchor)` | 锚点后插入；空锚点表示插入队首，O(1) |
@@ -79,9 +82,14 @@ destination.ops(&mut storage).clear();
 | `append(source)` | 消耗同存储的来源队列并追加到队尾，O(1) |
 | `clear` | 删除当前队列的全部元素，不影响其他队列，O(n) |
 
-`DequeStorage` 提供 `new/default`、`get`、`get_mut`、`contains_key`、`len`。
+`DequeStorage` 提供 `new/default`、`with_capacity`、`get`、`get_mut`、`contains_key`、`len`。
+`with_capacity(capacity)` 创建空存储并预留至少指定数量的元素空间；容量不是上限，超过后会自动扩容。
 `storage[key]` 可读写元素，无效键会 panic；不确定键是否有效时使用返回 Option 的查询方法。
 存储的 `len` 是所有共享队列的元素总数，不是某一个队列的长度。
+
+`storage.next(key)` 和 `storage.prev(key)` 分别返回后继键和前驱键：无效键返回 None，队列边界返回 Some(空键)。
+指定起点的迭代遇到空键或无效键时为空；有效起始键必须属于当前队列。
+所有迭代均返回元素引用，不返回键，迭代结束后继续调用 next 仍返回 None。
 
 ## 调用约束
 
