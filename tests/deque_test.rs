@@ -259,3 +259,114 @@ fn clear_only_removes_current_deques_elements() {
     assert_eq!(storage[retained], 3);
     assert_eq!(second.ops(&mut storage).pop_front(), Some(3));
 }
+
+#[test]
+fn move_ends_preserves_keys_and_repairs_both_queues() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut source = Deque::new();
+    let mut target = Deque::new();
+    let a = source.ops(&mut storage).push_back(1);
+    let b = source.ops(&mut storage).push_back(2);
+    let c = source.ops(&mut storage).push_back(3);
+    let d = target.ops(&mut storage).push_back(4);
+    assert_eq!(source.ops(&mut storage).move_front_to(&mut target), Some(a));
+    assert_eq!(source.ops(&mut storage).move_back_to(&mut target), Some(c));
+    assert_eq!(source.ops(&mut storage).move_back_to(&mut target), Some(b));
+    assert_eq!(source.ops(&mut storage).move_front_to(&mut target), None);
+    assert_eq!(source.len(), 0);
+    assert_eq!(target.len(), 4);
+    assert_eq!(storage.len(), 4);
+    assert_eq!(target.head(), d);
+    assert_eq!(target.tail(), b);
+    assert_eq!(
+        target.iter(&storage).copied().collect::<Vec<_>>(),
+        vec![4, 1, 3, 2]
+    );
+    assert_eq!(storage.next(d), Some(a));
+    assert_eq!(storage.prev(b), Some(c));
+    assert_eq!(target.ops(&mut storage).remove(a), Some(1));
+    assert_eq!(target.ops(&mut storage).pop_front(), Some(4));
+    assert_eq!(target.ops(&mut storage).pop_front(), Some(3));
+    assert_eq!(target.ops(&mut storage).pop_front(), Some(2));
+    assert_eq!(storage.len(), 0);
+}
+
+#[test]
+fn move_around_anchor_handles_middle_and_queue_boundaries() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut source = Deque::new();
+    let mut target = Deque::new();
+    let null = source.head();
+    let a = source.ops(&mut storage).push_back(1);
+    let b = source.ops(&mut storage).push_back(2);
+    let c = source.ops(&mut storage).push_back(3);
+    let anchor = target.ops(&mut storage).push_back(10);
+    let end = target.ops(&mut storage).push_back(20);
+    assert_eq!(
+        source.ops(&mut storage).move_before_to(b, &mut target, end),
+        Some(b)
+    );
+    assert_eq!(
+        source.ops(&mut storage).move_after_to(a, &mut target, null),
+        Some(a)
+    );
+    assert_eq!(
+        source
+            .ops(&mut storage)
+            .move_after_to(c, &mut target, anchor),
+        Some(c)
+    );
+    assert_eq!(source.len(), 0);
+    assert_eq!(target.len(), 5);
+    assert_eq!(
+        target.iter(&storage).copied().collect::<Vec<_>>(),
+        vec![1, 10, 3, 2, 20]
+    );
+    assert_eq!(storage.next(anchor), Some(c));
+    assert_eq!(storage.prev(end), Some(b));
+    let other = source.ops(&mut storage).push_back(30);
+    assert_eq!(
+        source
+            .ops(&mut storage)
+            .move_before_to(other, &mut target, null),
+        Some(other)
+    );
+    assert_eq!(target.tail(), other);
+    let removed = source.ops(&mut storage).push_back(40);
+    assert_eq!(source.ops(&mut storage).remove(removed), Some(40));
+    assert_eq!(
+        source
+            .ops(&mut storage)
+            .move_after_to(removed, &mut target, null),
+        None
+    );
+    assert_eq!(source.len(), 0);
+    assert_eq!(storage.len(), 6);
+    target.ops(&mut storage).clear();
+    assert_eq!(storage.len(), 0);
+}
+
+#[test]
+fn move_to_empty_destination_and_invalid_source() {
+    let mut storage = DequeStorage::<DefaultKey, i32>::new();
+    let mut source = Deque::new();
+    let mut target = Deque::new();
+    let null = source.head();
+    assert_eq!(
+        source
+            .ops(&mut storage)
+            .move_before_to(null, &mut target, null),
+        None
+    );
+    let key = source.ops(&mut storage).push_back(7);
+    assert_eq!(
+        source
+            .ops(&mut storage)
+            .move_after_to(key, &mut target, null),
+        Some(key)
+    );
+    assert_eq!(target.head(), key);
+    assert_eq!(target.tail(), key);
+    assert_eq!(storage[key], 7);
+    assert_eq!(target.ops(&mut storage).pop_front(), Some(7));
+}

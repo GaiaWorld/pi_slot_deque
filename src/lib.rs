@@ -341,6 +341,68 @@ impl<K: Key, T> DequeOps<'_, K, T> {
             None
         }
     }
+    /// 将来源队首元素移至目标队尾，原键保持有效；来源为空时返回 None，时间复杂度为 O(1)。
+    /// 来源与目标队列必须使用同一存储。
+    pub fn move_front_to(&mut self, target: &mut Deque<K, T>) -> Option<K> {
+        self.move_before_to(self.deque.head, target, K::null())
+    }
+
+    /// 将来源队尾元素移至目标队尾，原键保持有效；来源为空时返回 None，时间复杂度为 O(1)。
+    /// 来源与目标队列必须使用同一存储。
+    pub fn move_back_to(&mut self, target: &mut Deque<K, T>) -> Option<K> {
+        self.move_before_to(self.deque.tail, target, K::null())
+    }
+
+    /// 将来源队列中指定键的元素移至目标锚点之前；空锚点表示目标队尾。
+    /// 原键保持有效，无效来源键返回 None，时间复杂度为 O(1)。
+    /// 有效来源键必须属于来源队列，非空锚点必须属于目标队列；两个队列必须使用同一存储。
+    /// 不检查键的队列归属及存储是否相同。
+    pub fn move_before_to(&mut self, key: K, target: &mut Deque<K, T>, anchor: K) -> Option<K> {
+        self.move_to(key, target, anchor, true)
+    }
+
+    /// 将来源队列中指定键的元素移至目标锚点之后；空锚点表示目标队首。
+    /// 原键保持有效，无效来源键返回 None，时间复杂度为 O(1)。
+    /// 有效来源键必须属于来源队列，非空锚点必须属于目标队列；两个队列必须使用同一存储。
+    /// 不检查键的队列归属及存储是否相同。
+    pub fn move_after_to(&mut self, key: K, target: &mut Deque<K, T>, anchor: K) -> Option<K> {
+        self.move_to(key, target, anchor, false)
+    }
+
+    fn move_to(&mut self, key: K, target: &mut Deque<K, T>, anchor: K, before: bool) -> Option<K> {
+        let node = self.slot.0.get(key)?;
+        let (prev, next) = (node.prev, node.next);
+        // 先确定目标锚点位置，再从来源队列摘除节点，避免无效锚点导致来源队列已被修改。
+        let (target_prev, target_next) = if anchor.is_null() {
+            if before {
+                (target.tail, K::null())
+            } else {
+                (K::null(), target.head)
+            }
+        } else if before {
+            (self.slot.0[anchor].prev, anchor)
+        } else {
+            (anchor, self.slot.0[anchor].next)
+        };
+
+        self.repair(prev, next);
+        let slot = &mut self.slot.0;
+        slot[key].prev = target_prev;
+        slot[key].next = target_next;
+        if target_prev.is_null() {
+            target.head = key;
+        } else {
+            slot[target_prev].next = key;
+        }
+        if target_next.is_null() {
+            target.tail = key;
+        } else {
+            slot[target_next].prev = key;
+        }
+        target.len += 1;
+        Some(key)
+    }
+
     /// 将来源队列整体追加到队尾，消耗来源队列，时间复杂度为 O(1)。
     ///
     /// 两个队列必须使用同一存储；原元素键保持有效。
