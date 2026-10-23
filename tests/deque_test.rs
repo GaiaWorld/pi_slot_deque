@@ -1,5 +1,5 @@
 use pi_slot_deque::{Deque, DequeStorage};
-use slotmap::DefaultKey;
+use pi_slotmap::DefaultKey;
 
 #[test]
 fn neighbors_and_directional_iteration_follow_queue_links() {

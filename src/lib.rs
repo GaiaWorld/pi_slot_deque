@@ -15,7 +15,7 @@
 //!
 //! ```
 //! use pi_slot_deque::{Deque, DequeStorage};
-//! use slotmap::DefaultKey;
+//! use pi_slotmap::DefaultKey;
 //!
 //! let mut storage = DequeStorage::<DefaultKey, i32>::new();
 //! let mut deque = Deque::new();
@@ -33,7 +33,7 @@ use std::iter::Iterator;
 use std::marker::PhantomData;
 use std::ops::{Deref, Index, IndexMut};
 
-use slotmap::{Key, SlotMap};
+use pi_slotmap::{Key, SlotMap};
 
 /// 多个相同键类型、元素类型的队列可共享的存储。
 ///
@@ -517,7 +517,7 @@ impl<K: Key, T: Debug> Debug for LinkedNode<K, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use slotmap::DefaultKey;
+    use pi_slotmap::DefaultKey;
 
     #[test]
     fn append_preserves_order_and_consumes_source() {
