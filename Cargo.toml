@@ -1,12 +1,22 @@
 [package]
 name = "pi_slot_deque"
-version = "0.4.0"
+version = "0.6.0"
 authors = ["suncy <530739162@qq.com>"]
 edition = "2021"
 description = "Two terminal queue based on slotmap"
 repository = "https://github.com/GaiaWorld/pi_slot_deque.git"
 license = "MIT OR Apache-2.0"
 keywords = ["pi", "deque", "slot_deque", "pi_slot_deque"]
+exclude = [
+    "/docs/**",
+    "/AGENTS.md",
+    "/.agent_guide/**",
+    "/agent-skills/**",
+    "/.agents/**",
+    "/.aws/**",
+    "/.codex/**",
+    "/.gitattributes",
+]
 
 [dependencies]
-slotmap = { version = "0.3", package = "pi_slotmap" }
+pi_slotmap = "0.6"
